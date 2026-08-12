@@ -166,8 +166,10 @@ class request_guard {
         global $CFG, $SESSION, $USER;
 
         if (
-            (defined('CLI_SCRIPT') && CLI_SCRIPT) ||
-            (defined('NO_MOODLE_COOKIES') && NO_MOODLE_COOKIES && !PHPUNIT_TEST)
+            (
+                (defined('CLI_SCRIPT') && CLI_SCRIPT) ||
+                (defined('NO_MOODLE_COOKIES') && NO_MOODLE_COOKIES)
+            ) && !PHPUNIT_TEST
         ) {
             return true;
         }

@@ -1,4 +1,4 @@
-@local_forcemfa
+@local @local_forcemfa
 Feature: Require an authenticated user to configure a genuine MFA factor
   In order to protect Moodle access without replacing authentication
   As a site administrator
@@ -14,6 +14,9 @@ Feature: Require an authenticated user to configure a genuine MFA factor
     And the following "course enrolments" exist:
       | user     | course | role    |
       | student1 | C1     | student |
+    And the following "permission overrides" exist:
+      | capability         | permission | role | contextlevel | reference |
+      | tool/mfa:mfaaccess | Allow      | user | System       |           |
     And I log in as "admin"
     And the following config values are set as admin:
       | enabled | 1      | tool_mfa      |

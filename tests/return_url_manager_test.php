@@ -35,11 +35,12 @@ final class return_url_manager_test extends \advanced_testcase {
     public function test_store_and_take_once(): void {
         $this->resetAfterTest();
         $manager = new return_url_manager();
+        $originalurl = new \moodle_url('/course/view.php', ['id' => 7]);
 
-        $this->assertTrue($manager->store(new \moodle_url('/course/view.php', ['id' => 7])));
+        $this->assertTrue($manager->store($originalurl));
         $returnurl = $manager->take();
         $this->assertNotNull($returnurl);
-        $this->assertSame('/course/view.php?id=7', $returnurl->out_as_local_url(false));
+        $this->assertSame($originalurl->out_as_local_url(false), $returnurl->out_as_local_url(false));
         $this->assertNull($manager->take());
     }
 
