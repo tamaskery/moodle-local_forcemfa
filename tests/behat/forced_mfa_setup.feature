@@ -18,21 +18,14 @@ Feature: Require an authenticated user to configure a genuine MFA factor
       | capability         | permission | role | contextlevel | reference |
       | tool/mfa:mfaaccess | Allow      | user | System       |           |
     And I log in as "admin"
-    And the following config values are set as admin:
-      | enabled | 1      | tool_mfa      |
-      | enabled | 1      | factor_auth   |
-      | weight  | 100    | factor_auth   |
-      | goodauth| manual | factor_auth   |
-      | enabled | 1      | factor_nosetup|
-      | weight  | 100    | factor_nosetup|
-      | enabled | 1      | factor_totp   |
-      | weight  | 100    | factor_totp   |
-      | policy  | 1      | local_forcemfa|
+    And a supported forced MFA test rollout is configured
+    And the forced MFA rollout should be ready for the current user
     And I log out
 
   Scenario: A covered user without a genuine factor is sent to MFA preferences
     When I am on the "Course 1" course page logged in as "student1"
-    Then I should see "Multi-factor authentication preferences"
+    Then the forced MFA rollout should be ready for the current user
+    And I should see "Multi-factor authentication preferences"
     And I should see "Before continuing, configure a multi-factor authentication method"
 
   Scenario: A configured factor permits normal access

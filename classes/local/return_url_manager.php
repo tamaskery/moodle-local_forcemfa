@@ -36,17 +36,14 @@ class return_url_manager {
     public function store(\moodle_url $url): bool {
         global $SESSION;
 
-        $siteurl = new \moodle_url('/');
-        if (
-            $url->get_scheme() !== $siteurl->get_scheme() ||
-            $url->get_host() !== $siteurl->get_host() ||
-            $url->get_port() !== $siteurl->get_port()
-        ) {
+        try {
+            // Moodle strips the current installation prefix, including subdirectory installs.
+            $localurl = $url->out_as_local_url(false);
+        } catch (\coding_exception) {
             return false;
         }
 
-        $localurl = $this->normalise($url->get_path(true), $url->get_query_string(false));
-        if ($localurl === null) {
+        if (!$this->is_valid_local_url($localurl)) {
             return false;
         }
 
@@ -87,22 +84,6 @@ class return_url_manager {
         global $SESSION;
 
         unset($SESSION->{self::SESSION_PROPERTY});
-    }
-
-    /**
-     * Builds and validates a root-relative URL.
-     *
-     * @param string $path
-     * @param string $query
-     * @return string|null
-     */
-    private function normalise(string $path, string $query): ?string {
-        $localurl = $path;
-        if ($query !== '') {
-            $localurl .= '?' . $query;
-        }
-
-        return $this->is_valid_local_url($localurl) ? $localurl : null;
     }
 
     /**
