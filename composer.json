@@ -1,0 +1,12 @@
+{
+    "name": "tamaskery/moodle-local_forcemfa",
+    "description": "Require covered Moodle and Moodle Workplace users to configure a genuine MFA factor.",
+    "type": "moodle-local",
+    "license": "GPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Tamas Kery"
+        }
+    ],
+    "require": {}
+}
