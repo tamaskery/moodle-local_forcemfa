@@ -65,7 +65,7 @@ class behat_local_forcemfa extends behat_base {
      * Verifies that both the site rollout and the current user are ready for tool_mfa.
      *
      * @Then /^the forced MFA rollout should be ready for the current user$/
-    * @return void
+     * @return void
      */
     public function assert_rollout_ready(): void {
         global $USER;

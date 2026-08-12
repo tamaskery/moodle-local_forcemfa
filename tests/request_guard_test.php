@@ -67,6 +67,7 @@ final class request_guard_test extends \advanced_testcase {
      */
     public function test_content_url_is_not_safe(): void {
         $this->resetAfterTest();
+        $this->setUser($this->getDataGenerator()->create_user());
         $this->assertFalse($this->create_guard()->is_safe_url(new \moodle_url('/course/view.php', ['id' => 2])));
     }
 
