@@ -77,6 +77,7 @@ final class request_guard_test extends \advanced_testcase {
      */
     public function test_tool_mfa_redirect_exclusion_is_not_policy_exemption(): void {
         $this->resetAfterTest(true);
+        $this->setUser($this->getDataGenerator()->create_user());
         set_config('redir_exclusions', '/course/view.php', 'tool_mfa');
 
         $url = new \moodle_url('/course/view.php', ['id' => 2]);
@@ -90,6 +91,7 @@ final class request_guard_test extends \advanced_testcase {
      */
     public function test_arbitrary_factor_route_is_not_safe(): void {
         $this->resetAfterTest(true);
+        $this->setUser($this->getDataGenerator()->create_user());
         $url = new \moodle_url('/admin/tool/mfa/factor/untrusted/arbitrary.php');
         $this->assertFalse($this->create_guard()->is_safe_url($url));
     }
