@@ -59,7 +59,7 @@ class webservice_compatibility {
     public function has_unenforced_token_file_endpoints(): bool {
         global $CFG, $DB;
 
-        // tokenpluginfile.php uses long-lived core_files user keys and has no
+        // Tokenpluginfile.php uses long-lived core_files user keys and has no
         // post-authentication callback. Existing keys remain usable after factor revocation,
         // even when the external web-services advanced feature is later disabled.
         if ($DB->record_exists('user_private_key', ['script' => 'core_files'])) {

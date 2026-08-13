@@ -81,11 +81,15 @@ class global_policy_provider implements policy_provider_interface {
             return null;
         }
 
-        if (!in_array($policy, [
-            self::POLICY_DISABLED,
-            self::POLICY_EXCEPT_SITE_ADMINS,
-            self::POLICY_EVERYBODY,
-        ], true)) {
+        if (!in_array(
+            $policy,
+            [
+                self::POLICY_DISABLED,
+                self::POLICY_EXCEPT_SITE_ADMINS,
+                self::POLICY_EVERYBODY,
+            ],
+            true,
+        )) {
             return null;
         }
 
