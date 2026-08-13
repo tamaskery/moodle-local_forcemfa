@@ -17,11 +17,10 @@
 namespace local_forcemfa;
 
 use core\hook\after_config;
-use local_forcemfa\local\global_policy_provider;
-use local_forcemfa\local\qualifying_factor_checker;
+use local_forcemfa\local\authenticated_user_enforcer;
+use local_forcemfa\local\core_route_exemption_provider;
 use local_forcemfa\local\request_guard;
 use local_forcemfa\local\return_url_manager;
-use local_forcemfa\local\rollout_configuration;
 
 /**
  * Hook callbacks for local_forcemfa.
@@ -49,12 +48,10 @@ class hook_callbacks {
             return;
         }
 
-        $factorchecker = new qualifying_factor_checker();
         $guard = new request_guard(
-            new global_policy_provider(),
-            $factorchecker,
-            new rollout_configuration($factorchecker),
+            authenticated_user_enforcer::create(),
             new return_url_manager(),
+            new core_route_exemption_provider(),
         );
         $guard->enforce();
     }

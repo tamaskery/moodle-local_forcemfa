@@ -23,13 +23,21 @@
  */
 
 $string['check_action'] = 'Review forced MFA settings';
-$string['check_details'] = 'Forced MFA setup requires Moodle MFA, a 100-point no-setup rollout factor, '
-    . 'and at least one enabled positive-weight factor that users can set up.';
+$string['check_details'] = 'Forced MFA setup requires a valid policy, Moodle MFA, a 100-point no-setup rollout factor, '
+    . 'and at least one enabled positive-weight factor with an available setup action.';
 $string['check_disabled'] = 'Forced MFA setup is disabled.';
-$string['check_issue_noqualifyingfactor'] = 'No enabled positive-weight user-setup MFA factor is available.';
+$string['check_issue_invalidpolicy'] = 'The stored forced MFA policy value is invalid. Repair and save the plugin settings.';
+$string['check_issue_noqualifyingfactor'] = 'No enabled positive-weight MFA factor has an available user setup action.';
 $string['check_issue_nosetupdisabled'] = 'The no-setup MFA rollout factor is not enabled.';
 $string['check_issue_nosetupweight'] = 'The no-setup MFA rollout factor has a weight below 100.';
+$string['check_issue_tokenfileendpoints'] = 'A direct token-based file endpoint is available through an enabled service '
+    . 'or an existing core_files user key. Moodle provides no post-authentication plugin hook in those standalone endpoints, '
+    . 'so disable the service options, revoke the keys, or install a separately audited compatibility layer before claiming '
+    . 'complete forced-MFA enforcement.';
 $string['check_issue_toolmfadisabled'] = 'Moodle multi-factor authentication is disabled.';
+$string['check_issue_webserviceoverride'] = 'Another plugin implements the web-service execution override callback. '
+    . 'Moodle may stop before this plugin runs, so remove the conflict or audit and integrate it before claiming complete '
+    . 'forced-MFA enforcement.';
 $string['check_name'] = 'Forced MFA setup configuration';
 $string['check_ok'] = 'Forced MFA setup has the required rollout configuration.';
 $string['check_problem'] = 'Forced MFA setup is enabled but its rollout configuration is incomplete.';

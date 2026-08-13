@@ -16,11 +16,10 @@
 
 namespace local_forcemfa;
 
-use local_forcemfa\local\policy_provider_interface;
-use local_forcemfa\local\qualifying_factor_checker_interface;
+use local_forcemfa\local\authenticated_user_enforcer;
+use local_forcemfa\local\core_route_exemption_provider;
 use local_forcemfa\local\request_guard;
 use local_forcemfa\local\return_url_manager;
-use local_forcemfa\local\rollout_configuration;
 
 /**
  * Tests for request routing decisions.
@@ -72,6 +71,30 @@ final class request_guard_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that tool_mfa administrator redirect exclusions do not bypass this policy.
+     *
+     * @return void
+     */
+    public function test_tool_mfa_redirect_exclusion_is_not_policy_exemption(): void {
+        $this->resetAfterTest(true);
+        set_config('redir_exclusions', '/course/view.php', 'tool_mfa');
+
+        $url = new \moodle_url('/course/view.php', ['id' => 2]);
+        $this->assertFalse($this->create_guard()->is_safe_url($url));
+    }
+
+    /**
+     * Tests that the MFA factor directory is not broadly exempted.
+     *
+     * @return void
+     */
+    public function test_arbitrary_factor_route_is_not_safe(): void {
+        $this->resetAfterTest(true);
+        $url = new \moodle_url('/admin/tool/mfa/factor/untrusted/arbitrary.php');
+        $this->assertFalse($this->create_guard()->is_safe_url($url));
+    }
+
+    /**
      * Tests that a non-page request is denied rather than redirected.
      *
      * @return void
@@ -83,18 +106,21 @@ final class request_guard_test extends \advanced_testcase {
         set_config('enabled', 1, 'tool_mfa');
         set_config('enabled', 1, 'factor_nosetup');
 
-        $policy = $this->createStub(policy_provider_interface::class);
-        $policy->method('is_enforced')->willReturn(true);
-        $checker = $this->createStub(qualifying_factor_checker_interface::class);
-        $checker->method('has_factor')->willReturn(false);
-        $configuration = $this->createStub(rollout_configuration::class);
-        $configuration->method('is_usable')->willReturn(true);
+        $enforcer = $this->createStub(authenticated_user_enforcer::class);
+        $enforcer->method('evaluate')->willReturn(authenticated_user_enforcer::RESULT_SETUP_REQUIRED);
+        $enforcer->method('enforce_non_page_result')->willThrowException(
+            new \moodle_exception(
+                'errorsetuprequired',
+                'local_forcemfa',
+                '',
+                (new \moodle_url('/admin/tool/mfa/user_preferences.php'))->out(false),
+            ),
+        );
 
         $guard = new class (
-            $policy,
-            $checker,
-            $configuration,
+            $enforcer,
             new return_url_manager(),
+            new core_route_exemption_provider(),
         ) extends request_guard {
             /**
              * Marks the test request as AJAX or web service transport.
@@ -122,15 +148,13 @@ final class request_guard_test extends \advanced_testcase {
         $this->setUser($user);
         set_user_preference('auth_forcepasswordchange', 1, $user);
 
-        $policy = $this->createMock(policy_provider_interface::class);
-        $policy->expects($this->never())->method('is_enforced');
-        $checker = $this->createStub(qualifying_factor_checker_interface::class);
+        $enforcer = $this->createMock(authenticated_user_enforcer::class);
+        $enforcer->expects($this->never())->method('evaluate');
 
         $guard = new request_guard(
-            $policy,
-            $checker,
-            new rollout_configuration($checker),
+            $enforcer,
             new return_url_manager(),
+            new core_route_exemption_provider(),
         );
         $guard->enforce();
     }
@@ -148,18 +172,13 @@ final class request_guard_test extends \advanced_testcase {
         $CFG->siteadmins .= ',' . $admin->id;
         $this->setUser($admin);
 
-        $policy = $this->createStub(policy_provider_interface::class);
-        $policy->method('is_enforced')->willReturn(true);
-        $checker = $this->createStub(qualifying_factor_checker_interface::class);
-        $checker->method('has_factor')->willReturn(false);
-        $configuration = $this->createStub(rollout_configuration::class);
-        $configuration->method('is_usable')->willReturn(false);
+        $enforcer = $this->createStub(authenticated_user_enforcer::class);
+        $enforcer->method('evaluate')->willReturn(authenticated_user_enforcer::RESULT_REPAIR_ALLOWED);
 
         $guard = new request_guard(
-            $policy,
-            $checker,
-            $configuration,
+            $enforcer,
             new return_url_manager(),
+            new core_route_exemption_provider(),
         );
         $guard->enforce();
         $this->assertTrue(is_siteadmin($admin));
@@ -175,18 +194,16 @@ final class request_guard_test extends \advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
         $this->setUser($user);
 
-        $policy = $this->createStub(policy_provider_interface::class);
-        $policy->method('is_enforced')->willReturn(true);
-        $checker = $this->createStub(qualifying_factor_checker_interface::class);
-        $checker->method('has_factor')->willReturn(false);
-        $configuration = $this->createStub(rollout_configuration::class);
-        $configuration->method('is_usable')->willReturn(false);
+        $enforcer = $this->createStub(authenticated_user_enforcer::class);
+        $enforcer->method('evaluate')->willReturn(authenticated_user_enforcer::RESULT_CONFIGURATION_UNAVAILABLE);
+        $enforcer->method('enforce_non_page_result')->willThrowException(
+            new \moodle_exception('errorconfigurationunavailable', 'local_forcemfa'),
+        );
 
         $guard = new class (
-            $policy,
-            $checker,
-            $configuration,
+            $enforcer,
             new return_url_manager(),
+            new core_route_exemption_provider(),
         ) extends request_guard {
             /**
              * Marks the test request as AJAX or web service transport.
@@ -209,14 +226,13 @@ final class request_guard_test extends \advanced_testcase {
      * @return request_guard
      */
     private function create_guard(): request_guard {
-        $policy = $this->createStub(policy_provider_interface::class);
-        $checker = $this->createStub(qualifying_factor_checker_interface::class);
+        $enforcer = $this->createStub(authenticated_user_enforcer::class);
+        $enforcer->method('evaluate')->willReturn(authenticated_user_enforcer::RESULT_NOT_ENFORCED);
 
         return new request_guard(
-            $policy,
-            $checker,
-            new rollout_configuration($checker),
+            $enforcer,
             new return_url_manager(),
+            new core_route_exemption_provider(),
         );
     }
 }

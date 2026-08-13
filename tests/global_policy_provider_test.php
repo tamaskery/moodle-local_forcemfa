@@ -40,21 +40,70 @@ final class global_policy_provider_test extends \advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
 
         set_config('policy', global_policy_provider::POLICY_DISABLED, 'local_forcemfa');
-        $this->assertFalse($provider->is_enforced($user));
+        $decision = $provider->get_decision($user);
+        $this->assertTrue($decision->is_valid());
+        $this->assertFalse($decision->is_enforced());
 
         set_config('policy', global_policy_provider::POLICY_EXCEPT_SITE_ADMINS, 'local_forcemfa');
-        $this->assertTrue($provider->is_enforced($user));
+        $this->assertTrue($provider->get_decision($user)->is_enforced());
 
         $manager = $this->getDataGenerator()->create_user();
         $managerrole = $DB->get_record('role', ['shortname' => 'manager'], '*', MUST_EXIST);
         role_assign($managerrole->id, $manager->id, \context_system::instance()->id);
-        $this->assertTrue($provider->is_enforced($manager));
+        $this->assertTrue($provider->get_decision($manager)->is_enforced());
 
         // Only Moodle's site administrator list creates the exemption. Roles and capabilities do not.
         $CFG->siteadmins .= ',' . $user->id;
-        $this->assertFalse($provider->is_enforced($user));
+        $this->assertFalse($provider->get_decision($user)->is_enforced());
 
         set_config('policy', global_policy_provider::POLICY_EVERYBODY, 'local_forcemfa');
-        $this->assertTrue($provider->is_enforced($user));
+        $this->assertTrue($provider->get_decision($user)->is_enforced());
+    }
+
+    /**
+     * Tests that malformed stored policies are distinguishable from disabled.
+     *
+     * @param string $value
+     * @dataProvider invalid_policy_provider
+     * @return void
+     */
+    public function test_invalid_policy_values_fail_validation(string $value): void {
+        $this->resetAfterTest();
+        $user = $this->getDataGenerator()->create_user();
+        set_config('policy', $value, 'local_forcemfa');
+
+        $provider = new global_policy_provider();
+        $this->assertNull($provider->get_configured_policy());
+        $decision = $provider->get_decision($user);
+        $this->assertFalse($decision->is_valid());
+        $this->assertFalse($decision->is_enforced());
+    }
+
+    /**
+     * Returns malformed policy values.
+     *
+     * @return array
+     */
+    public static function invalid_policy_provider(): array {
+        return [
+            'negative' => ['-1'],
+            'out of range' => ['3'],
+            'non-numeric' => ['enabled'],
+            'decimal' => ['1.0'],
+            'empty' => [''],
+        ];
+    }
+
+    /**
+     * Tests the missing-setting default.
+     *
+     * @return void
+     */
+    public function test_missing_policy_defaults_to_disabled(): void {
+        $this->resetAfterTest();
+        unset_config('policy', 'local_forcemfa');
+
+        $provider = new global_policy_provider();
+        $this->assertSame(global_policy_provider::POLICY_DISABLED, $provider->get_configured_policy());
     }
 }

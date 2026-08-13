@@ -17,7 +17,7 @@
 namespace local_forcemfa\local;
 
 /**
- * Resolves whether forced MFA setup applies to a user.
+ * Resolves the forced MFA setup policy for a user.
  *
  * A future tenant-aware policy can implement this interface without changing the
  * factor checker or request enforcement service.
@@ -28,10 +28,10 @@ namespace local_forcemfa\local;
  */
 interface policy_provider_interface {
     /**
-     * Returns whether the supplied user is covered by the policy.
+     * Returns the validated policy decision for the supplied user.
      *
      * @param \stdClass $user
-     * @return bool
+     * @return policy_decision
      */
-    public function is_enforced(\stdClass $user): bool;
+    public function get_decision(\stdClass $user): policy_decision;
 }

@@ -71,4 +71,26 @@ final class rollout_configuration_test extends \advanced_testcase {
             $configuration->get_issues(),
         );
     }
+
+    /**
+     * Tests that a configured-looking but unusable SMS factor is reported.
+     *
+     * @return void
+     */
+    public function test_sms_without_gateway_is_not_a_usable_rollout_factor(): void {
+        $this->resetAfterTest(true);
+        set_config('enabled', 1, 'tool_mfa');
+        set_config('enabled', 1, 'factor_nosetup');
+        set_config('weight', 100, 'factor_nosetup');
+        set_config('enabled', 1, 'factor_sms');
+        set_config('weight', 100, 'factor_sms');
+        unset_config('smsgateway', 'factor_sms');
+
+        $configuration = new rollout_configuration(new qualifying_factor_checker());
+        $this->assertContains(
+            rollout_configuration::ISSUE_NO_QUALIFYING_FACTOR,
+            $configuration->get_issues(),
+        );
+        $this->assertFalse($configuration->is_usable());
+    }
 }

@@ -25,11 +25,19 @@ namespace local_forcemfa\local;
  */
 interface qualifying_factor_checker_interface {
     /**
-     * Returns whether a qualifying factor type is available at site level.
+     * Returns whether an enrollable qualifying factor is available at site level.
      *
      * @return bool
      */
     public function has_available_factor(): bool;
+
+    /**
+     * Returns whether the supplied current user can enroll a qualifying factor.
+     *
+     * @param \stdClass $user
+     * @return bool
+     */
+    public function can_setup_factor(\stdClass $user): bool;
 
     /**
      * Returns whether the supplied user has an active qualifying factor.

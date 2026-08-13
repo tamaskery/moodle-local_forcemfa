@@ -26,36 +26,30 @@ use core\output\notification;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class request_guard {
-    /** @var policy_provider_interface Policy provider. */
-    private readonly policy_provider_interface $policyprovider;
-
-    /** @var qualifying_factor_checker_interface Qualifying factor checker. */
-    private readonly qualifying_factor_checker_interface $factorchecker;
-
-    /** @var rollout_configuration Rollout configuration validator. */
-    private readonly rollout_configuration $configuration;
+    /** @var authenticated_user_enforcer Current-user enforcement service. */
+    private readonly authenticated_user_enforcer $enforcer;
 
     /** @var return_url_manager One-time return URL manager. */
     private readonly return_url_manager $returnurls;
 
+    /** @var route_exemption_provider_interface Safe route provider. */
+    private readonly route_exemption_provider_interface $routeexemptions;
+
     /**
      * Constructor.
      *
-     * @param policy_provider_interface $policyprovider
-     * @param qualifying_factor_checker_interface $factorchecker
-     * @param rollout_configuration $configuration
+     * @param authenticated_user_enforcer $enforcer
      * @param return_url_manager $returnurls
+     * @param route_exemption_provider_interface $routeexemptions
      */
     public function __construct(
-        policy_provider_interface $policyprovider,
-        qualifying_factor_checker_interface $factorchecker,
-        rollout_configuration $configuration,
+        authenticated_user_enforcer $enforcer,
         return_url_manager $returnurls,
+        route_exemption_provider_interface $routeexemptions,
     ) {
-        $this->policyprovider = $policyprovider;
-        $this->factorchecker = $factorchecker;
-        $this->configuration = $configuration;
+        $this->enforcer = $enforcer;
         $this->returnurls = $returnurls;
+        $this->routeexemptions = $routeexemptions;
     }
 
     /**
@@ -66,17 +60,25 @@ class request_guard {
     public function enforce(): void {
         global $USER;
 
-        if ($this->should_skip_request() || !$this->policyprovider->is_enforced($USER)) {
+        if (request_scope::should_skip_browser_request()) {
             return;
         }
 
         $currenturl = $this->get_current_url();
         $nonpagerequest = $this->is_non_page_request();
+        $result = $this->enforcer->evaluate($USER);
 
-        if ($this->factorchecker->has_factor($USER)) {
+        if ($result === authenticated_user_enforcer::RESULT_SATISFIED) {
             if (!$nonpagerequest && ($returnurl = $this->returnurls->take())) {
                 redirect($returnurl);
             }
+            return;
+        }
+
+        if (
+            $result === authenticated_user_enforcer::RESULT_NOT_ENFORCED ||
+            $result === authenticated_user_enforcer::RESULT_REPAIR_ALLOWED
+        ) {
             return;
         }
 
@@ -85,16 +87,12 @@ class request_guard {
             return;
         }
 
-        if (!$this->configuration->is_usable() || !\tool_mfa\manager::is_ready()) {
+        if ($result === authenticated_user_enforcer::RESULT_CONFIGURATION_UNAVAILABLE) {
             $this->returnurls->clear();
 
-            // This repair-only exception is deliberately independent from the configured policy.
-            if (is_siteadmin($USER->id)) {
-                return;
-            }
-
             if ($nonpagerequest) {
-                throw new \moodle_exception('errorconfigurationunavailable', 'local_forcemfa');
+                $this->enforcer->enforce_non_page_result($result);
+                return;
             }
 
             redirect(new \moodle_url('/local/forcemfa/configuration_error.php'));
@@ -102,12 +100,8 @@ class request_guard {
 
         $setupurl = new \moodle_url('/admin/tool/mfa/user_preferences.php');
         if ($nonpagerequest) {
-            throw new \moodle_exception(
-                'errorsetuprequired',
-                'local_forcemfa',
-                '',
-                $setupurl->out(false),
-            );
+            $this->enforcer->enforce_non_page_result($result);
+            return;
         }
 
         $this->returnurls->store($currenturl);
@@ -124,95 +118,7 @@ class request_guard {
      * @return bool
      */
     public function is_safe_url(\moodle_url $url): bool {
-        $fixedurls = [
-            new \moodle_url('/admin/tool/mfa/auth.php'),
-            new \moodle_url('/admin/tool/mfa/user_preferences.php'),
-            new \moodle_url('/admin/tool/mfa/action.php'),
-            new \moodle_url('/admin/tool/mfa/guide.php'),
-            new \moodle_url('/admin/tool/policy/view.php'),
-            new \moodle_url('/admin/tool/policy/index.php'),
-            new \moodle_url('/login/confirm.php'),
-            new \moodle_url('/login/logout.php'),
-            new \moodle_url('/local/forcemfa/configuration_error.php'),
-        ];
-
-        foreach ($fixedurls as $fixedurl) {
-            if ($url->compare($fixedurl, URL_MATCH_BASE)) {
-                return true;
-            }
-        }
-
-        // Factor-owned setup helpers, such as the SMS phone editor, are part of tool_mfa's setup flow.
-        $factorpath = (new \moodle_url('/admin/tool/mfa/factor/'))->get_path();
-        if (str_starts_with($url->get_path(), $factorpath)) {
-            return true;
-        }
-
-        foreach (\tool_mfa\manager::get_no_redirect_urls() as $noredirecturl) {
-            if ($url->compare($noredirecturl)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Returns whether the request is outside the applicable authenticated browser flow.
-     *
-     * @return bool
-     */
-    private function should_skip_request(): bool {
-        global $CFG, $SESSION, $USER;
-
-        if (
-            (
-                (defined('CLI_SCRIPT') && CLI_SCRIPT) ||
-                (defined('NO_MOODLE_COOKIES') && NO_MOODLE_COOKIES)
-            ) && !PHPUNIT_TEST
-        ) {
-            return true;
-        }
-
-        if (!empty($CFG->adminsetuppending) || !empty($CFG->upgraderunning)) {
-            return true;
-        }
-
-        if (!isloggedin() || isguestuser() || \core\session\manager::is_loggedinas()) {
-            return true;
-        }
-
-        if (
-            empty($USER->id) || !empty($USER->deleted) || !empty($USER->suspended) ||
-            (isset($USER->confirmed) && !$USER->confirmed)
-        ) {
-            return true;
-        }
-
-        if (user_not_fully_set_up($USER) || get_user_preferences('auth_forcepasswordchange', false, $USER)) {
-            return true;
-        }
-
-        // Moodle MFA marks requests where a core onboarding route must take precedence.
-        if (!empty($SESSION->mfa_pending)) {
-            return true;
-        }
-
-        if (isset($USER->policyagreed) && !$USER->policyagreed) {
-            $manager = new \core_privacy\local\sitepolicy\manager();
-            if ($manager->get_redirect_url(false)) {
-                return true;
-            }
-        }
-
-        if (
-            !empty($CFG->maintenance_enabled) &&
-            !has_capability('moodle/site:maintenanceaccess', \context_system::instance())
-        ) {
-            return true;
-        }
-
-        return false;
+        return $this->routeexemptions->is_exempt($url);
     }
 
     /**

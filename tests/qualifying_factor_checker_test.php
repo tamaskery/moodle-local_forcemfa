@@ -42,11 +42,55 @@ final class qualifying_factor_checker_test extends \advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
         set_config('enabled', 1, 'factor_' . $factorname);
         set_config('weight', 100, 'factor_' . $factorname);
+        if ($factorname === 'sms') {
+            set_config('smsgateway', 1, 'factor_sms');
+        }
         $this->create_user_factor($user, $factorname);
 
         $checker = new qualifying_factor_checker();
         $this->assertTrue($checker->has_available_factor());
         $this->assertTrue($checker->has_factor($user));
+    }
+
+    /**
+     * Tests that SMS without a gateway cannot make rollout health pass.
+     *
+     * An already active SMS instance remains genuine MFA state; availability and
+     * current-user qualification are intentionally separate questions.
+     *
+     * @return void
+     */
+    public function test_sms_without_gateway_is_not_available(): void {
+        $this->resetAfterTest(true);
+        $user = $this->getDataGenerator()->create_user();
+        $this->setUser($user);
+        set_config('enabled', 1, 'factor_sms');
+        set_config('weight', 100, 'factor_sms');
+        unset_config('smsgateway', 'factor_sms');
+        $this->create_user_factor($user, 'sms');
+
+        $checker = new qualifying_factor_checker();
+        $this->assertFalse($checker->has_available_factor());
+        $this->assertFalse($checker->can_setup_factor($user));
+        $this->assertTrue($checker->has_factor($user));
+    }
+
+    /**
+     * Tests current-user enrollment availability.
+     *
+     * @return void
+     */
+    public function test_current_user_can_setup_available_factor(): void {
+        $this->resetAfterTest(true);
+        $user = $this->getDataGenerator()->create_user();
+        $otheruser = $this->getDataGenerator()->create_user();
+        $this->setUser($user);
+        set_config('enabled', 1, 'factor_totp');
+        set_config('weight', 100, 'factor_totp');
+
+        $checker = new qualifying_factor_checker();
+        $this->assertTrue($checker->can_setup_factor($user));
+        $this->assertFalse($checker->can_setup_factor($otheruser));
     }
 
     /**

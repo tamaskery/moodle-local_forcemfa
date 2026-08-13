@@ -31,6 +31,9 @@ The policy defaults to **Disabled**. The other choices are:
 
 The plugin never changes `tool_mfa` settings automatically.
 
+Stored policy values are validated at runtime. A malformed value is not treated as disabled: ordinary authenticated
+users receive the generic configuration-support response, while actual site administrators retain repair access.
+
 ## What counts as configured MFA
 
 A factor qualifies when the public `tool_mfa` factor API reports that it:
@@ -42,11 +45,32 @@ A factor qualifies when the public `tool_mfa` factor API reports that it:
 
 The checker is factor-agnostic, so compatible third-party user-setup factors follow the same contract. Passive factors, zero-weight factors, missing records, and revoked records do not qualify.
 
+Rollout readiness is stricter than existing-factor qualification. At least one qualifying factor must also expose its
+setup action. For example, an enabled SMS factor without a configured SMS gateway does not make the health check pass.
+
 ## Request behaviour
 
 Enforcement runs from Moodle 4.5's `core\hook\after_config` hook after `tool_mfa` has handled the authenticated session. Moodle and Workplace onboarding remains authoritative for incomplete profiles, forced password changes, policy acceptance, login confirmation, pending MFA authentication, and related flows.
 
-Normal page requests are redirected to Moodle's MFA preferences page. A one-time return target contains only a validated site-local path and query in the current session; schemes, hosts, externally supplied return targets, scheme-relative URLs, and backslash forms are rejected. AJAX and web-service requests receive a localized Moodle exception rather than a redirect.
+Normal page requests are redirected to Moodle's MFA preferences page. A one-time return target contains only a validated site-local path and query in the current session; schemes, hosts, externally supplied return targets, scheme-relative URLs, and backslash forms are rejected. AJAX requests receive a localized Moodle exception rather than a redirect.
+
+Token-authenticated external functions are enforced through Moodle's `override_webservice_execution` callback. Moodle
+invokes this after authenticating the token and validating parameters, but before calling the external function. The
+plugin neither parses nor authenticates tokens itself.
+
+Moodle stops processing execution overrides when one returns a replacement result. The security check therefore also
+fails if another plugin implements that callback; the callbacks must be explicitly audited and integrated before a
+complete enforcement claim is safe.
+
+Moodle's standalone token file endpoints (`webservice/upload.php`, `webservice/pluginfile.php`,
+`webservice/draftfile.php`, and `tokenpluginfile.php`) do not invoke a post-authentication plugin callback. If an enabled
+external service permits direct token upload/download, or a long-lived `core_files` user key exists, the plugin's
+security check returns an error. Disable those service options and revoke the keys, or install a separately audited
+compatibility layer before claiming complete forced-MFA enforcement.
+
+Safe routes are exact Moodle onboarding and MFA setup endpoints. The plugin does not import the administrator-defined
+`tool_mfa/redir_exclusions` list, and it does not exempt the entire MFA factor directory. Factor plugins may declare
+their own exact no-redirect setup endpoints through the supported `tool_mfa` factor API.
 
 If forced setup is enabled while the supported rollout configuration is unusable, ordinary covered users receive a non-looping generic support page. The page does not reveal MFA configuration details.
 
@@ -68,7 +92,9 @@ Workplace source is licensed and is not part of the public Moodle test matrix. A
 
 ## Development and testing
 
-The repository contains PHPUnit coverage for policy, factor qualification, rollout health, safe routes, and return-target validation, plus Behat coverage for redirect, configured, revoked, disabled-policy, administrator, and deep-link-resume flows.
+The repository contains PHPUnit coverage for fail-safe policy parsing, shared browser/web-service decisions, factor
+qualification and enrollability, rollout health, strict safe routes, token file-endpoint detection, and return-target
+validation. Behat covers redirect, configured, revoked, disabled-policy, administrator, and deep-link-resume flows.
 
 Moodle Plugin CI runs PHP lint, coding style, PHPDoc, plugin validation/dependency checks, upgrade savepoints, PHPUnit, privacy tests, and Behat for each supported Moodle branch.
 

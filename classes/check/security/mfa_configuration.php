@@ -20,6 +20,7 @@ use core\check\result;
 use local_forcemfa\local\global_policy_provider;
 use local_forcemfa\local\qualifying_factor_checker;
 use local_forcemfa\local\rollout_configuration;
+use local_forcemfa\local\webservice_compatibility;
 
 /**
  * Reports whether the supported first-factor rollout configuration is ready.
@@ -57,7 +58,15 @@ class mfa_configuration extends \core\check\check {
      */
     public function get_result(): result {
         $details = get_string('check_details', 'local_forcemfa');
-        $policy = (int) get_config('local_forcemfa', 'policy');
+        $policy = (new global_policy_provider())->get_configured_policy();
+
+        if ($policy === null) {
+            $details .= \html_writer::tag(
+                'ul',
+                \html_writer::tag('li', get_string('check_issue_invalidpolicy', 'local_forcemfa')),
+            );
+            return new result(result::ERROR, get_string('check_problem', 'local_forcemfa'), $details);
+        }
 
         if ($policy === global_policy_provider::POLICY_DISABLED) {
             return new result(result::NA, get_string('check_disabled', 'local_forcemfa'), $details);
@@ -65,6 +74,13 @@ class mfa_configuration extends \core\check\check {
 
         $configuration = new rollout_configuration(new qualifying_factor_checker());
         $issues = $configuration->get_issues();
+        $webservicecompatibility = new webservice_compatibility();
+        if ($webservicecompatibility->has_unenforced_token_file_endpoints()) {
+            $issues[] = 'tokenfileendpoints';
+        }
+        if ($webservicecompatibility->has_competing_execution_override()) {
+            $issues[] = 'webserviceoverride';
+        }
         if (empty($issues)) {
             return new result(result::OK, get_string('check_ok', 'local_forcemfa'), $details);
         }

@@ -38,7 +38,11 @@ Do not add tenant fixtures by inferring tenancy from course categories, URLs, ho
 | WP-17 | Tenant custom domain, setup completion | The validated relative return target resumes on the same effective tenant domain, once, without accepting an external origin. |
 | WP-18 | User moved from Tenant A to Tenant B | Enforcement immediately reflects the current user's supported Moodle MFA state. No stale plugin tenant state exists because none is stored. |
 | WP-19 | Active factor revoked between requests | The next covered request redirects to setup, independently of tenant or course context. |
-| WP-20 | AJAX and web service request without a genuine factor | A localized setup-required exception is returned; no cross-domain redirect or tenant data disclosure occurs. |
+| WP-20 | AJAX request without a genuine factor | A localized setup-required exception is returned; no cross-domain redirect or tenant data disclosure occurs. |
+| WP-21 | REST external-function call using a valid Tenant A token, no genuine factor | Moodle authenticates the token first. The external function is then rejected with the localized setup-required exception and produces no side effect. |
+| WP-22 | REST external-function call using a valid Tenant B token with a genuine factor | The external function proceeds under normal Moodle/Workplace service and capability authorization, independently of Tenant A. |
+| WP-23 | Enabled service permits direct token file upload/download, or a `core_files` user key exists | The forced-MFA security health check fails. Production release remains blocked until those options are disabled and keys revoked, or a separately audited compatibility layer enforces the same current-user prerequisite. |
+| WP-24 | Another plugin implements `override_webservice_execution` | The forced-MFA security health check fails until callback ordering and replacement behavior are removed or explicitly integrated and audited. |
 
 ## Evidence checklist
 
@@ -50,5 +54,7 @@ For every release candidate, retain:
 - query/log evidence that no cross-tenant user search occurs;
 - results for each production authentication method; and
 - confirmation that tenant allocation, authentication settings, permissions, and course authorization are unchanged.
+- a sentinel-side-effect trace proving rejected REST functions never reach their implementation; and
+- confirmation that direct token upload/download service options and `core_files` keys are absent or covered by an audited compatibility layer.
 
 Any failed or unavailable row blocks the production compatibility claim until it is resolved or explicitly excluded from the deployment scope.

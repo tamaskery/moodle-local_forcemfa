@@ -30,3 +30,27 @@
 function local_forcemfa_security_checks(): array {
     return [new \local_forcemfa\check\security\mfa_configuration()];
 }
+
+/**
+ * Enforces configured-factor policy after Moodle authenticates a web-service user.
+ *
+ * Moodle invokes this callback after token/session authentication and parameter
+ * validation, but before the external function. Returning false preserves normal
+ * execution; a Moodle exception is serialized by the active web-service transport.
+ *
+ * @param stdClass $function External function metadata supplied by Moodle.
+ * @param array $params Validated external function parameters.
+ * @return bool Always false when execution may continue.
+ */
+function local_forcemfa_override_webservice_execution(stdClass $function, array $params): bool {
+    global $USER;
+
+    if (\local_forcemfa\local\request_scope::should_skip_authenticated_user()) {
+        return false;
+    }
+
+    $enforcer = \local_forcemfa\local\authenticated_user_enforcer::create();
+    $enforcer->enforce_non_page($USER);
+
+    return false;
+}
